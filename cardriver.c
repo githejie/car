@@ -18,23 +18,15 @@ int car_port[10]={
 				S5PV210_GPE1(1),
 				S5PV210_GPE1(2),
 			//红外驱动IO
-			    S5PV210_GPH2(2),
-    			S5PV210_GPH2(3),};
-
-/*红外感应*/
-int get_value(void)     
-{
-    int right_value = gpio_get_value(car_port[8]);
-    int left_value = gpio_get_value(car_port[9]);
-    return (right_value + left_value*2);
-}
+			    S5PV210_GPH3(0),
+    			S5PV210_GPH3(1),};
 
 /*自定义的open函数*/
 int car_open(struct inode *inode, struct file *pfile)
 {
 	int i;
     //初始化查询
-    for(i = 0;i < 8;i++)
+    for(i = 0;i < 10;i++)
     {
         gpio_free(car_port[i]); 
 		if (gpio_request(car_port[i],"car") < 0)
@@ -46,6 +38,10 @@ int car_open(struct inode *inode, struct file *pfile)
     {
         gpio_direction_output(car_port[i],0);
     }
+    for(i = 8; i < 10;i++)
+    {
+        gpio_direction_input(car_port[i]);
+    }
     return 0;
 }
 
@@ -53,7 +49,7 @@ int car_open(struct inode *inode, struct file *pfile)
 int car_close(struct inode *inode, struct file *pfile)
 {
     int i;
-    for(i = 0;i < 8;i++)
+    for(i = 0;i < 10;i++)
     {
  		gpio_set_value(car_port[i],1);
 		gpio_free(car_port[i]);       
@@ -61,8 +57,16 @@ int car_close(struct inode *inode, struct file *pfile)
     return 0;
 }
 
+/*红外感应*/
+int get_value(void)     
+{
+    int right_value = gpio_get_value(car_port[8]);
+    int left_value = gpio_get_value(car_port[9]);
+    return (right_value + left_value*2);
+}
+
 //小车停止
-static void stop(void)
+void stop(void)
 {
 	int i;
 	for(i=0;i<8;i++)
@@ -70,7 +74,7 @@ static void stop(void)
 }
 
 //小车前进
-static void run(void)
+void run(void)
 {
 	int i;
 	for(i=0;i<8;i+=2)
@@ -80,7 +84,7 @@ static void run(void)
 }
 
 //小车后退
-static void back(void)
+void back(void)
 {
 	int i;
 	for(i=0;i<8;i+=2)
@@ -90,7 +94,7 @@ static void back(void)
 }
 
 //左转
-static void left(void)
+void left(void)
 {
 	gpio_set_value(car_port[0],1);
 	gpio_set_value(car_port[1],0);
@@ -103,7 +107,7 @@ static void left(void)
 }
 
 //右转
-static void right(void)
+void right(void)
 {
 	gpio_set_value(car_port[0],1);
 	gpio_set_value(car_port[1],1);
@@ -116,8 +120,10 @@ static void right(void)
 }
 
 //向后左转
-static void b_left(void)
+void b_left(void)
 {
+	back();
+	while(1000);
 	gpio_set_value(car_port[0],1);
 	gpio_set_value(car_port[1],0);
 	gpio_set_value(car_port[2],1);
@@ -129,8 +135,10 @@ static void b_left(void)
 }
 
 //向后右转
-static void b_right(void)
+void b_right(void)
 {
+	back();
+	while(1000);
 	gpio_set_value(car_port[0],1);
 	gpio_set_value(car_port[1],1);
 	gpio_set_value(car_port[2],1);
@@ -142,24 +150,26 @@ static void b_right(void)
 }
 
 //自动模式
-static void auto(void)
-{
-	while(1)
-    {
-        switch(get_value())
-        {
-            case 0:
-            {
-                back();
-                sleep(1);
-                break;
-            }
-            case 1:right();break;
-            case 2:left();break;
-            case 3:run();break;
-        }
-    }
-}
+// void auto(void)
+// {
+// 	while(1)
+//     {
+//         switch(get_value())
+//         {
+//             case 0:
+//             {
+//                 back();
+//                 while(1000);
+//                 break;
+//             }
+//             case 1:b_right();break;
+//             case 2:b_left();break;
+//             case 3:run();break;
+//             default: 
+//             break;
+//         }
+//     }
+// }
 
 
 //car的写函数,将write设备文件的操作重新解读
@@ -180,9 +190,10 @@ ssize_t car_write(struct file *pfile, const char __user *buffer, size_t len, lof
 	if(data==5)
 		b_left();
 	if(data==6)
-		b_left();
+		b_right();
 	if(data==7)
-		run(); 	
+		// auto(); 
+		run();	
 	return 1;
 }
 
@@ -202,7 +213,7 @@ static int __init car_init(void)
     printk(KERN_EMERG "hello world!I m a module.\n");
 
     // 动态分配设备号
-    if(alloc_chrdev_region(&devid,250,1,"carID")==0)
+    if(alloc_chrdev_region(&devid,0,1,"carID")==0)
     {
         printk(KERN_INFO "dev id was allocated. id is %u\n",devid);
         printk(KERN_INFO "major is %d, minor is %d\n",MAJOR(devid),MINOR(devid));
